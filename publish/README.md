@@ -13,7 +13,7 @@
 
 **Before anything public**
 - [ ] Confirm company name, domain, GitHub org, HF org, X handle and contact email. The placeholders used are
-      `Zoros`, `zoros.com`, `github.com/zoros-ai/sparkstone`, `huggingface.co/zoros`, `hello@zoros.com`
+      `Zoros`, `zoros.com`, `huggingface.co/zoros`, `hello@zoros.com`
       (`grep -rn "zoros" .` lists every use)
 - [ ] Reserve the GitHub org, the HF org and the X handle; run a trademark clearance search for "Sparkstone"
 - [ ] Message Basalt's author ([upstream-pr.md](upstream-pr.md))

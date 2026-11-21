@@ -44,7 +44,7 @@ bandwidth than an RTX 5090, so the 5090's 613 tok/s will **not** carry over, and
 ## Quick start (on a DGX Spark)
 
 ```bash
-git clone https://github.com/zoros-ai/sparkstone && cd sparkstone
+git clone https://github.com/zorost/sparkstone && cd sparkstone
 ```
 
 ```bash

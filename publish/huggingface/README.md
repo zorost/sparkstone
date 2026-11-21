@@ -12,11 +12,11 @@ tags:
 pipeline_tag: image-text-to-text
 ---
 
-<p align="center"><img src="https://raw.githubusercontent.com/zoros-ai/sparkstone/main/assets/brand/png/sparkstone-lockup-light.png" width="480" alt="Sparkstone"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/zorost/sparkstone/main/assets/brand/png/sparkstone-lockup-light.png" width="480" alt="Sparkstone"></p>
 
 # Inkling 2 Mini · Sparkstone (DGX Spark)
 
-Run **Thinking Machines' Inkling 2 Mini** on an **NVIDIA DGX Spark** with [Sparkstone](https://github.com/zoros-ai/sparkstone),
+Run **Thinking Machines' Inkling 2 Mini** on an **NVIDIA DGX Spark** with [Sparkstone](https://github.com/zorost/sparkstone),
 the Basalt engine ported to GB10.
 
 This repository holds **Spark configurations and benchmark results**, not new weights. The model file is Basalt's
@@ -27,7 +27,7 @@ and credit stays with its author.
 ## Quick start (on the Spark)
 
 ```bash
-git clone https://github.com/zoros-ai/sparkstone && cd sparkstone
+git clone https://github.com/zorost/sparkstone && cd sparkstone
 scripts/build-spark.sh && scripts/download-model.sh && scripts/serve-spark.sh
 ```
 
@@ -47,7 +47,7 @@ scripts/build-spark.sh && scripts/download-model.sh && scripts/serve-spark.sh
 | 2× DGX Spark (Twin, aggregate) | pending | pending | pending | pending |
 
 Method: Basalt's `basalt-bench --community` preset. See
-[benchmarking](https://github.com/zoros-ai/sparkstone/blob/main/docs/05-benchmarking.md).
+[benchmarking](https://github.com/zorost/sparkstone/blob/main/docs/05-benchmarking.md).
 
 ## Credits and licence
 

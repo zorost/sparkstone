@@ -44,7 +44,7 @@ Sparkstone is the GB10 port + tooling. Patches are MIT and offered upstream.
 
 **7/**
 Try it:
-github.com/zoros-ai/sparkstone
+github.com/zorost/sparkstone
 `FULL=1 scripts/selftest.sh` gives you a full report from your own Spark.
 
 Built by @{{zoros_handle}}. #DGXSpark #LocalAI #LLM #OpenSource

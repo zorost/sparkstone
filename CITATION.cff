@@ -5,7 +5,7 @@ type: software
 authors:
   - name: "Zoros"
     website: "https://zoros.com"
-repository-code: "https://github.com/zoros-ai/sparkstone"
+repository-code: "https://github.com/zorost/sparkstone"
 license: Apache-2.0
 version: 0.1.0
 date-released: "2026-11-21"
