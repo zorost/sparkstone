@@ -61,9 +61,11 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq g++-13-aarch64-linux-gnu qemu-user qemu-user-binfmt cmake python3-venv
-          pip install regex   # convert_tests imports the tokenizer
       - name: engine (pinned upstream + patches)
         run: scripts/fetch-engine.sh
+      - name: engine Python requirements
+        # numpy at configure time registers the Python suites (convert_tests, migration_tests, iq_parity_fixtures)
+        run: pip install -r engine/requirements.txt
       - name: CUDA 13.0 root for aarch64 (PyPI wheels)
         run: scripts/cross/make-cuda-aarch64-root.sh "$HOME/.cuda-aarch64"
       - name: configure
