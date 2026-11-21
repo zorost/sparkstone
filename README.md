@@ -32,6 +32,7 @@ benchmark tooling, and a router that turns **two Sparks into one endpoint**.
 | ✅ **GPU code builds for GB10** | Every kernel instruction (block-scaled FP4/FP8 `mma.sync`, FP4 converts, TMA, `setmaxnreg`) assembles for `sm_121a`. The Inkling engine links with 45 sm_121 cubins and no sm_120 leftovers |
 | ✅ **Host builds for AArch64** | 107/107 host sources compile, and `basalt`, `basalt-bench`, `basalt-probe` and `basalt-vision` link as AArch64 executables |
 | ✅ **Unit tests pass on AArch64** | 78/78 of Basalt's CPU tests pass (under `qemu-aarch64`). One upstream race the port exposed is fixed (patch 0005) |
+| ✅ **No regression on x86 / RTX 5090** | With the patches, all five models build for sm_120 and 106/106 CPU tests pass |
 | ✅ **Twin-Spark router** | OpenAI/Anthropic-compatible, conversation-affine, SSE streaming, failover. Standard library only, with 7 tests |
 | ⏳ **Runs on a real Spark** | Next step: `scripts/selftest.sh` runs Basalt's GPU parity suite, a smoke test and the community benchmark on the hardware |
 | 🔬 **Faster single streams on two Sparks** | Expert parallel over ConnectX-7, gated on a latency measurement ([docs/03](docs/03-dual-spark.md)) |

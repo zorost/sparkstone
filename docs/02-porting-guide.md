@@ -129,7 +129,7 @@ Two pitfalls hit while building this:
 |---|---|
 | [`tools/cubin_archs.py`](../tools/cubin_archs.py) `bin/basalt` | every embedded cubin is `sm_121` (`{'sm_121': 45}`) |
 | [`tools/check_aarch64_host.py`](../tools/check_aarch64_host.py) `BUILD` | every host source compiles with `aarch64-linux-gnu-g++ -march=armv9-a` |
-| `ctest -L cpu` | Basalt's CPU suite (78 tests): 78/78 on AArch64 |
+| `ctest -L cpu` | Basalt's CPU suite: **78/78 on AArch64** (Inkling build), **106/106 on x86-64** (all five models, regression) |
 | `ctest -L gpu` | kernels vs CPU references **on the GPU**: run on the Spark (`scripts/selftest.sh` stage 4) |
 
 ## Still open, and needing the hardware

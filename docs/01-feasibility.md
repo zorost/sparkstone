@@ -40,7 +40,7 @@ engine run on NVIDIA DGX Spark, and on two of them, in a form worth publishing?
 | Does it link into an AArch64 binary? | **Yes.** `bin/basalt`, `basalt-bench`, `basalt-probe`, `basalt-vision` are AArch64 ELF linking `libcudart.so.13` / `libcublas.so.13`, with no unresolved symbols | Cross build: [`cmake/aarch64-gb10-cross.cmake`](../cmake/aarch64-gb10-cross.cmake) + [`scripts/cross/make-cuda-aarch64-root.sh`](../scripts/cross/make-cuda-aarch64-root.sh) |
 | Does the AArch64 binary run? | **Its host side starts and parses its CLI** under QEMU AArch64 emulation (no GPU there) | `qemu-aarch64 bin/basalt --help` |
 | Does the AArch64 host code behave correctly? | **Yes: 78/78 of Basalt's CPU tests pass** (tokenizers, sampler, server protocol, platform layer, GPU planning, drafting policy). An intermittent failure turned out to be a latent upstream race, fixed in patch 0005 | `ctest -L cpu` on the cross build via `CMAKE_CROSSCOMPILING_EMULATOR=qemu-aarch64` |
-| Does the x86 / RTX 5090 build still work with the patches? | See [02 · porting guide](02-porting-guide.md#verification-tools) for the regression run | Full 5-model sm_120 build + `ctest -L cpu` on x86 |
+| Does the x86 / RTX 5090 build still work with the patches? | **Yes.** All 5 models build with 0 errors; `ctest -L cpu` passes **106/106**; the binary holds 123 sm_120 cubins, as before | Full 5-model sm_120 build with `-DBUILD_TESTING=ON` on x86-64 |
 | Does it produce correct tokens on a Spark? How fast? | **Not yet known: needs hardware** | [05 · benchmarking](05-benchmarking.md) is the procedure |
 
 ## What it is likely to be worth

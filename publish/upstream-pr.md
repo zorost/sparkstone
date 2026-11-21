@@ -30,8 +30,7 @@ carrying patches. Basalt's README asks for help with Blackwell testing hardware,
 >    (`platform_memory_test` failed ~50 % under qemu-aarch64; 0/12 after)
 >
 > Verified so far: Inkling build for sm_121 links with only sm_121 cubins; the AArch64 cross build links; `ctest -L cpu`
-> 78/78 on AArch64 (qemu); the x86 sm_120 full build and CPU tests still pass
-> *(confirm from the regression run before sending)*. GPU parity and a community bench row
+> 78/78 on AArch64 (qemu); on x86 the full 5-model sm_120 build is clean and `ctest -L cpu` passes 106/106. GPU parity and a community bench row
 > from real Spark hardware will follow. Happy to restructure however you prefer: one PR, separate PRs, or a
 > different CMake approach (e.g. `120f` family targets).
 >
