@@ -1,0 +1,257 @@
+From fa982d2c67586d635b02eefeaaf06c29ab91f0ef Mon Sep 17 00:00:00 2001
+From: Sparkstone (Zoros) <sparkstone@users.noreply.github.com>
+Date: Sat, 21 Nov 2026 20:55:26 +0000
+Subject: [PATCH 3/5] kernels_cpu: leave the x86 expert kernels out of non-x86
+ builds
+
+CMake records whether the host is x86 (BASALT_HOST_X86). Off x86 the AVX2 /
+AVX-512 / VNNI kernel files, the two ggml dot-product builds and the tests
+and benches of those kernels are not built;
+src/kernels/cpu/portable/x86_tier_absent.cpp answers the kernels' probes with
+'not supported' and stops with a message if a row kernel is ever called.
+On GB10 the GPU reads every expert in unified memory, so the planner never
+places one on the CPU. Inkling 2 Mini needs no CPU kernel; Flash-Next's and
+DeepSeek's CPU tiers need NEON ports before they run on AArch64.
+
+With this series an AArch64 build passes all 78 `ctest -L cpu` tests (run
+under qemu-aarch64).
+---
+ CMakeLists.txt                               |  47 ++++++---
+ src/kernels/cpu/portable/x86_tier_absent.cpp | 103 +++++++++++++++++++
+ 2 files changed, 138 insertions(+), 12 deletions(-)
+ create mode 100644 src/kernels/cpu/portable/x86_tier_absent.cpp
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index e94b592..a9e2daa 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -111,6 +111,16 @@ function(basalt_embed_manifest target)
+   endif()
+ endfunction()
+ 
++# The host CPU family. The CPU expert tier's kernels are x86-only (AVX2 / AVX-512); on any other host (AArch64:
++# GB10 / DGX Spark, where the GPU reads every expert in unified memory) they are left out and
++# src/kernels/cpu/portable/x86_tier_absent.cpp answers their probes with "not supported".
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|i[3-6]86)$")
++  set(BASALT_HOST_X86 ON)
++else()
++  set(BASALT_HOST_X86 OFF)
++endif()
++message(STATUS "basalt: host ${CMAKE_SYSTEM_PROCESSOR}, x86 CPU kernels ${BASALT_HOST_X86}")
++
+ # The vector-extension flags per file, in each compiler's spelling. MSVC has no per-feature ISA switches: /arch:
+ # turns on the whole rung (and a TU built with it may use those instructions anywhere in itself, exactly as the
+ # GNU flags do), so the run-time probe still decides which of these objects runs.
+@@ -1680,9 +1690,12 @@ if(BUILD_TESTING)
+   basalt_cpu_test(NAME route_lossy_test COMMAND route_lossy_test)
+ endif()
+ 
+-add_library(kernels_cpu STATIC src/kernels/cpu/expert.cpp src/kernels/cpu/pool.cpp
+-            src/kernels/cpu/cpu_quota.cpp src/kernels/cpu/expert_layout.cpp src/kernels/cpu/q2_avx2.cpp
+-            src/kernels/cpu/q2_avx2_vnni.cpp)
++add_library(kernels_cpu STATIC src/kernels/cpu/pool.cpp src/kernels/cpu/cpu_quota.cpp src/kernels/cpu/expert_layout.cpp)
++if(BASALT_HOST_X86)
++  target_sources(kernels_cpu PRIVATE src/kernels/cpu/expert.cpp src/kernels/cpu/q2_avx2.cpp src/kernels/cpu/q2_avx2_vnni.cpp)
++else()
++  target_sources(kernels_cpu PRIVATE src/kernels/cpu/portable/x86_tier_absent.cpp)
++endif()
+ target_include_directories(kernels_cpu PUBLIC include)
+ # only the kernel files get the AVX-512 / AVX2 flags; the pool and the probe run on any x86-64,
+ # and the engine picks the kernels at run time (cpu_avx512_ok).
+@@ -1707,6 +1720,7 @@ set_target_properties(ggml_quants PROPERTIES C_STANDARD 11 C_EXTENSIONS ON POSIT
+ # ggml_cpu_dispatch.cpp picks one at run time (cpu_avx512_ok / cpu_avx2_ok).
+ set(_ggml_dots_avx2_flags ${_isa_avx2_flags})
+ set(_ggml_dots_avx512_flags ${_isa_avx512_flags})
++if(BASALT_HOST_X86)
+ foreach(_isa avx2 avx512)
+   add_library(ggml_dots_${_isa} OBJECT src/kernels/cpu/ggml/ggml_cpu_dots.c)
+   target_include_directories(ggml_dots_${_isa} PRIVATE include src/kernels/cpu/ggml)
+@@ -1714,15 +1728,18 @@ foreach(_isa avx2 avx512)
+   target_compile_definitions(ggml_dots_${_isa} PRIVATE ggml_get_type_traits_cpu=ggml_get_type_traits_cpu_${_isa})
+   set_target_properties(ggml_dots_${_isa} PROPERTIES C_STANDARD 11 C_EXTENSIONS ON POSITION_INDEPENDENT_CODE ON)
+ endforeach()
++endif()
+ # part of kernels_cpu (the pool calls these and they call its CPU probe: one library, so GNU ld's
+ # one-pass static linking has no cycle to resolve)
+-target_sources(kernels_cpu PRIVATE src/kernels/cpu/native_expert.cpp src/kernels/cpu/iq_avx512.cpp
+-                                         src/kernels/cpu/nvfp4_avx512.cpp
+-                                         src/kernels/cpu/nvfp4_avx2.cpp src/kernels/cpu/nvfp4_avx2_vnni.cpp
+-                                         src/kernels/cpu/iq_avx2.cpp src/kernels/cpu/iq_avx2_vnni.cpp
+-                                         src/kernels/cpu/kq_avx2.cpp
+-                                         src/kernels/cpu/kq_avx1.cpp src/kernels/cpu/ggml/ggml_cpu_dispatch.cpp
+-                                         $<TARGET_OBJECTS:ggml_dots_avx2> $<TARGET_OBJECTS:ggml_dots_avx512>)
++target_sources(kernels_cpu PRIVATE src/kernels/cpu/native_expert.cpp src/kernels/cpu/ggml/ggml_cpu_dispatch.cpp)
++if(BASALT_HOST_X86)
++  target_sources(kernels_cpu PRIVATE src/kernels/cpu/iq_avx512.cpp
++                                     src/kernels/cpu/nvfp4_avx512.cpp
++                                     src/kernels/cpu/nvfp4_avx2.cpp src/kernels/cpu/nvfp4_avx2_vnni.cpp
++                                     src/kernels/cpu/iq_avx2.cpp src/kernels/cpu/iq_avx2_vnni.cpp
++                                     src/kernels/cpu/kq_avx2.cpp src/kernels/cpu/kq_avx1.cpp
++                                     $<TARGET_OBJECTS:ggml_dots_avx2> $<TARGET_OBJECTS:ggml_dots_avx512>)
++endif()
+ # the i-quant rows also use BMI2 (pdep/pext for the sign masks; cpu_avx512_ok requires it). MSVC compiles the
+ # intrinsics without a switch.
+ if(MSVC)
+@@ -1752,7 +1769,7 @@ if(MSVC)
+   set_source_files_properties(src/kernels/cpu/ggml/f16c_scalar_msvc.c PROPERTIES COMPILE_OPTIONS "/arch:AVX2")
+ endif()
+ target_link_libraries(kernels_cpu PUBLIC ggml_quants)
+-if(BUILD_TESTING)
++if(BUILD_TESTING AND BASALT_HOST_X86)
+   # the router lookahead's dot on each rung this CPU has (AVX2, the older CPUs' AVX1) against a double reference
+   add_executable(router_dot_parity tests/kernels/cpu/router_dot_parity.cpp)
+   target_link_libraries(router_dot_parity PRIVATE kernels_cpu)
+@@ -1912,7 +1929,7 @@ if(BUILD_TESTING)
+   set_tests_properties(prefill_fp4_test PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
+ endif()
+ endif()
+-if(BUILD_TESTING)
++if(BUILD_TESTING AND BASALT_HOST_X86)   # the x86 CPU expert kernels against references
+   add_executable(native_expert_parity tests/kernels/native_expert_parity.cpp)
+   target_include_directories(native_expert_parity PRIVATE ${_gpu_include_directories})
+   target_link_libraries(native_expert_parity PRIVATE kernels kernels_cpu artifact ${_gpu_runtime_target})
+@@ -2001,15 +2018,19 @@ if(BUILD_TESTING)
+   target_link_libraries(dequant_bf16_test PRIVATE kernels artifact ${_gpu_runtime_target})
+ 
+   # the CPU expert kernels on each instruction set side by side (timing; the parity checks are native_expert_parity)
++  if(BASALT_HOST_X86)
+   add_executable(avx_bench tests/kernels/cpu/avx_bench.cpp)
+   target_link_libraries(avx_bench PRIVATE kernels_cpu)
++  endif()
+ 
+   # needs the AVX-512 VNNI and VBMI instruction sets, which not every host has
+ 
++  if(BASALT_HOST_X86)
+   add_executable(nvfp4_cpu_rows_test tests/kernels/cpu/nvfp4_cpu_rows_test.cpp)
+   target_link_libraries(nvfp4_cpu_rows_test PRIVATE kernels_cpu)
+   basalt_cpu_test(NAME nvfp4_cpu_rows_test COMMAND nvfp4_cpu_rows_test)
+   set_tests_properties(nvfp4_cpu_rows_test PROPERTIES SKIP_RETURN_CODE 77 LABELS "cpu;avx2")
++  endif()
+ 
+   # Both tests run on a synthetic expert fixture by default; --file experts.bin (the pack's experts section) checks real blobs.
+ 
+@@ -2022,6 +2043,7 @@ if(BUILD_TESTING)
+   target_link_libraries(pool_native_test PRIVATE kernels_cpu platform)
+   basalt_cpu_test(NAME pool_native_test COMMAND pool_native_test)
+   # the AVX2 i-quant rows: the madd build against the AVX-VNNI build (bitwise) and a double reference
++  if(BASALT_HOST_X86)
+   add_executable(iq_avx2_test tests/kernels/cpu/iq_avx2_test.cpp)
+   target_link_libraries(iq_avx2_test PRIVATE kernels_cpu platform)
+   basalt_cpu_test(NAME iq_avx2_test COMMAND iq_avx2_test)
+@@ -2030,6 +2052,7 @@ if(BUILD_TESTING)
+   target_link_libraries(iq_avx512_test PRIVATE kernels_cpu platform)
+   basalt_cpu_test(NAME iq_avx512_test COMMAND iq_avx512_test)
+   set_property(TEST iq_avx512_test APPEND PROPERTY LABELS avx512)
++  endif()
+ 
+   # DirectFile has a Linux backend and a Windows backend, and this test covers those two; macOS is not a platform
+   # the engine builds for.
+diff --git a/src/kernels/cpu/portable/x86_tier_absent.cpp b/src/kernels/cpu/portable/x86_tier_absent.cpp
+new file mode 100644
+index 0000000..de22f64
+--- /dev/null
++++ b/src/kernels/cpu/portable/x86_tier_absent.cpp
+@@ -0,0 +1,103 @@
++// src/kernels/cpu/portable/x86_tier_absent.cpp - the CPU expert tier's x86 entry points on a host without them.
++//
++// Built instead of the AVX2 / AVX-512 kernel files when the host is not x86-64 (AArch64: GB10 / DGX Spark). Every
++// probe answers "not supported" and cpu_avx2_ok() / cpu_avx512_ok() are false there (platform/compiler.hpp), so the
++// engine never plans an expert onto the CPU and none of the row kernels below is reached. On a unified-memory GB10
++// the GPU reads every expert where it lies, so the tier has nothing to add. A call that does arrive is a planning
++// bug: it stops the process with one line naming the kernel instead of computing a wrong row.
++#include "basalt/kernels/cpu/expert.hpp"
++#include "basalt/kernels/cpu/iq_avx2.hpp"
++#include "basalt/kernels/cpu/iq_avx512.hpp"
++#include "basalt/kernels/cpu/nvfp4_avx2.hpp"
++#include "basalt/kernels/cpu/nvfp4_avx512.hpp"
++#include "basalt/ggml/ggml.h"
++
++#include <cstdio>
++#include <cstdlib>
++
++namespace basalt::kernels::cpu {
++namespace {
++[[noreturn]] void absent(const char* kernel) {
++    std::fprintf(stderr, "basalt: the CPU expert kernel %s is x86-only and this build is for %s; the expert planner "
++                         "should not have placed an expert on the CPU (please report this)\n", kernel,
++#if defined(__aarch64__)
++                 "aarch64"
++#else
++                 "a non-x86 host"
++#endif
++    );
++    std::abort();
++}
++}  // namespace
++
++// probes: nothing runs here
++bool iq256_supported(int) noexcept { return false; }
++bool iq4nl256_fits(int) noexcept { return false; }
++bool iq512_supported(int) noexcept { return false; }
++bool iq1s_512_fits(int) noexcept { return false; }
++bool iq_exact_512_supported(int) noexcept { return false; }
++bool nvfp4_256_fits(int, int) noexcept { return false; }
++bool nvfp4_512_fits(int, int) noexcept { return false; }
++
++// kernels: unreachable behind the probes above and the x86 feature checks
++void act_quant_q8_1(const float*, int, ActQ&) { absent("act_quant_q8_1"); }
++void act_quant_q8_1_avx2(const float*, int, ActQ&) { absent("act_quant_q8_1_avx2"); }
++void q2_0_gguf_rows_multi(const uint8_t*, size_t, int, const ActQ* const*, int, float* const*, int, int) {
++    absent("q2_0_gguf_rows_multi");
++}
++void q2_0_gguf_rows_multi_avx2(const uint8_t*, size_t, int, const ActQ* const*, int, float* const*, int, int) {
++    absent("q2_0_gguf_rows_multi_avx2");
++}
++void quantize_q8_K_avx2(const float*, void*, int64_t) { absent("quantize_q8_K_avx2"); }
++void quantize_q8_K_avx512(const float*, void*, int64_t) { absent("quantize_q8_K_avx512"); }
++void iq256_gu_rows(int, const uint8_t*, size_t, size_t, int, const void* const*, int, float* const*, int, int) {
++    absent("iq256_gu_rows");
++}
++void iq256_rows(int, const uint8_t*, size_t, int, const void* const*, int, float* const*, int, int) {
++    absent("iq256_rows");
++}
++void iq4nl256_down_rows(const uint8_t*, size_t, int, const void* const*, int, float* const*, int, int) {
++    absent("iq4nl256_down_rows");
++}
++void iq512_gu_rows(int, const uint8_t*, size_t, size_t, int, const void* const*, int, float* const*, int, int) {
++    absent("iq512_gu_rows");
++}
++void iq512_rows(int, const uint8_t*, size_t, int, const void* const*, int, float* const*, int, int) {
++    absent("iq512_rows");
++}
++void iq1s_512_gu_rows(const uint8_t*, size_t, size_t, int, float, float, bool, float, const void* const*, int,
++                      float* const*, int, int) {
++    absent("iq1s_512_gu_rows");
++}
++void iq1s_512_rows(const uint8_t*, size_t, int, const void* const*, int, float* const*, int, int) {
++    absent("iq1s_512_rows");
++}
++void iq_exact_512_gu_rows(int, const uint8_t*, size_t, size_t, int, float, float, bool, float, const void* const*, int,
++                          float* const*, int, int) {
++    absent("iq_exact_512_gu_rows");
++}
++void iq_exact_512_rows(int, const uint8_t*, size_t, int, const void* const*, int, float* const*, int, int) {
++    absent("iq_exact_512_rows");
++}
++void nvfp4_256_gu_rows(const uint8_t*, size_t, size_t, int, float, float, float, const void* const*, int,
++                       float* const*, int, int) {
++    absent("nvfp4_256_gu_rows");
++}
++void nvfp4_256_down_rows(const uint8_t*, size_t, int, float, const void* const*, int, float* const*, int, int) {
++    absent("nvfp4_256_down_rows");
++}
++void nvfp4_512_gu_rows(const uint8_t*, size_t, size_t, int, float, float, float, const void* const*, int,
++                       float* const*, int, int) {
++    absent("nvfp4_512_gu_rows");
++}
++void nvfp4_512_down_rows(const uint8_t*, size_t, int, float, const void* const*, int, float* const*, int, int) {
++    absent("nvfp4_512_down_rows");
++}
++}  // namespace basalt::kernels::cpu
++
++// The extracted ggml dot products are built per x86 rung; the dispatcher returns no table when neither rung runs,
++// which is what the callers already handle for a CPU without AVX2.
++extern "C" {
++const ggml_type_traits_cpu* ggml_get_type_traits_cpu_avx2(ggml_type) { return nullptr; }
++const ggml_type_traits_cpu* ggml_get_type_traits_cpu_avx512(ggml_type) { return nullptr; }
++}

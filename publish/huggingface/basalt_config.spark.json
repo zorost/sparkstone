@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "models": [
+    {
+      "model": "../models/Inkling-2-Mini-NVFP4-q8.basalt",
+      "alias": "inkling-2-mini",
+      "max-context": 262144,
+      "kv": "fp8"
+    }
+  ],
+  "server": { "host": "127.0.0.1", "port": 8080 }
+}

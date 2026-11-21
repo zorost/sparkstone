@@ -1,0 +1,8 @@
+/engine/
+/.work/
+/models/
+/selftest-*/
+/selftest-*.tar.gz
+/link-report-*.txt
+__pycache__/
+*.pyc

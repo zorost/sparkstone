@@ -1,0 +1,55 @@
+From 3d21713f960c63d310d3f4fb68b4c4c829e297b9 Mon Sep 17 00:00:00 2001
+From: Sparkstone (Zoros) <sparkstone@users.noreply.github.com>
+Date: Sat, 21 Nov 2026 20:55:26 +0000
+Subject: [PATCH 5/5] platform: a RAM-guard pause waits out a judgement in
+ flight
+
+The guard's thread checked the pause flag, then read the available memory,
+then judged it. A ram_guard_pause(true) landing between the check and the
+judgement let one reading be judged after the pause call had returned: with a
+floor raised in the meantime, a paused (sleeping) engine was marked low.
+ram_guard_pause(true) now sets the flag under the judgement lock, and the
+guard's own judgement drops its reading if a pause came in while it read.
+
+Seen as an intermittent platform_memory_test failure ("paused, readings
+below the floor: the level stays ok") under qemu-aarch64, where the /proc
+read is slow enough to hit the window about half the time; 0 failures in 12
+runs after the change.
+---
+ src/platform/memory.cpp | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/src/platform/memory.cpp b/src/platform/memory.cpp
+index 3c1506b..d4722f8 100644
+--- a/src/platform/memory.cpp
++++ b/src/platform/memory.cpp
+@@ -518,8 +518,11 @@ RamLevel g_judged = RamLevel::Ok;   // the level the last judgement left (under
+ BelowFloorClock g_below;            // how long the reading has been below the floor (under g_judge_mu)
+ 
+ // Judges the reading `avail` against the floor: sets the level, counts a drop below the floor, logs a change.
+-void guard_judge(uint64_t avail) {
++// `from_guard`: the guard's own thread, whose reading was taken before the lock and is dropped if a pause came in
++// meanwhile (ram_guard_pause(true) sets the flag under the same lock, so no judgement outlives a pause call).
++void guard_judge(uint64_t avail, bool from_guard = false) {
+     std::lock_guard<std::mutex> judge(g_judge_mu);
++    if (from_guard && g_guard_paused.load()) return;
+     const uint64_t floor = g_guard_floor.load();
+     // the stall reading only matters below the floor
+     const MemoryStalls stalls = ram_below_floor(avail, floor) ? memory_stalls() : MemoryStalls{};
+@@ -623,7 +626,7 @@ void start_ram_guard(uint64_t floor_bytes) {
+                 }
+             }
+ #endif
+-            guard_judge(avail);
++            guard_judge(avail, true);
+             std::this_thread::sleep_for(std::chrono::milliseconds(100));
+         }
+     }).detach();   // runs for the life of the process
+@@ -643,6 +646,7 @@ uint64_t ram_guard_drops() { return g_guard_drops.load(); }
+ 
+ void ram_guard_pause(bool paused) {
+     if (paused) {
++        std::lock_guard<std::mutex> judge(g_judge_mu);   // waits out a judgement in flight
+         g_guard_paused = true;
+         return;
+     }

@@ -1,0 +1,213 @@
+From cd4e3d5e677393b2a465d197e9df98ca485d65f6 Mon Sep 17 00:00:00 2001
+From: Sparkstone (Zoros) <sparkstone@users.noreply.github.com>
+Date: Sat, 21 Nov 2026 20:55:26 +0000
+Subject: [PATCH 2/5] platform: build the host code on AArch64
+
+compiler.hpp includes immintrin.h and cpuid.h on x86 only. Elsewhere cpuid()
+and xgetbv0() read zeros, so every x86 feature probe answers 'absent';
+cpu_relax() is the Arm 'yield'; a new prefetch_l2() maps to prefetcht1 on x86
+and __builtin_prefetch elsewhere. graph.cpp and the CPU pool call these
+instead of _mm_pause/_mm_prefetch. compiler_test checks the x86 readings on
+x86 and the zero readings elsewhere. No change on x86.
+---
+ include/basalt/platform/compiler.hpp | 41 ++++++++++++++++++++++------
+ src/core/graph.cpp                   |  4 +--
+ src/kernels/cpu/pool.cpp             | 12 ++++----
+ tests/platform/compiler_test.cpp     |  5 ++++
+ 4 files changed, 46 insertions(+), 16 deletions(-)
+
+diff --git a/include/basalt/platform/compiler.hpp b/include/basalt/platform/compiler.hpp
+index 3a9d981..2052ece 100644
+--- a/include/basalt/platform/compiler.hpp
++++ b/include/basalt/platform/compiler.hpp
+@@ -1,22 +1,28 @@
+ // include/basalt/platform/compiler.hpp - the compiler- and CPU-specific spellings the host code needs, behind
+ // one name each, so no source file asks which compiler it is built with.
+ //
+-// x86-64 only: the engine's CPU kernels are AVX2 / AVX-512. Every function is inline and maps to the one instruction
+-// or builtin each compiler gives for it.
++// x86-64: the engine's CPU kernels are AVX2 / AVX-512. AArch64 (GB10 / DGX Spark): the x86 kernels are not built, the
++// feature probes below report no x86 feature, and the spin-wait and prefetch helpers map to their Arm forms. Every
++// function is inline and maps to the one instruction or builtin each compiler gives for it.
+ #pragma once
+ 
+ #include <cstdint>
+ 
++#if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
++#define BASALT_X86 1
+ #include <immintrin.h>
+ #if defined(_MSC_VER)
+ #include <intrin.h>
+ #else
+ #include <cpuid.h>
+ #endif
++#else
++#define BASALT_X86 0
++#endif
+ 
+ // Marks a function that uses AVX2, FMA and F16C intrinsics in a translation unit built without those flags. MSVC
+ // accepts the intrinsics in any function and needs no marking.
+-#if defined(_MSC_VER)
++#if defined(_MSC_VER) || !BASALT_X86
+ #define BASALT_TARGET_AVX2_FMA_F16C
+ #else
+ #define BASALT_TARGET_AVX2_FMA_F16C __attribute__((target("avx2,fma,f16c")))
+@@ -33,8 +39,12 @@ inline constexpr bool kPreferMemberwiseVectorAssignment = false;
+ #endif
+ 
+ /// CPUID leaf `leaf`, subleaf `sub`: r[0..3] = EAX, EBX, ECX, EDX.
++/// Off x86 every register reads 0, so every feature probe built on it answers "absent".
+ inline void cpuid(unsigned leaf, unsigned sub, unsigned (&r)[4]) {
+-#if defined(_MSC_VER)
++#if !BASALT_X86
++    (void) leaf; (void) sub;
++    r[0] = r[1] = r[2] = r[3] = 0;
++#elif defined(_MSC_VER)
+     int x[4];
+     __cpuidex(x, (int) leaf, (int) sub);
+     for (int i = 0; i < 4; ++i) r[i] = (unsigned) x[i];
+@@ -45,7 +55,9 @@ inline void cpuid(unsigned leaf, unsigned sub, unsigned (&r)[4]) {
+ 
+ /// XCR0, which says which register state the OS saves (read only after CPUID reports OSXSAVE).
+ inline unsigned long long xgetbv0() {
+-#if defined(_MSC_VER)
++#if !BASALT_X86
++    return 0;
++#elif defined(_MSC_VER)
+     return _xgetbv(0);
+ #else
+     unsigned lo = 0, hi = 0;
+@@ -65,10 +77,21 @@ inline int ctz32(unsigned m) {
+ #endif
+ }
+ 
+-/// One iteration of a spin wait: yields the pipeline to the core's SMT sibling. A no-op off x86.
++/// One iteration of a spin wait: yields the pipeline to the core's SMT sibling (x86 `pause`, Arm `yield`).
+ inline void cpu_relax() {
+-#if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
++#if BASALT_X86
+     _mm_pause();
++#elif defined(__aarch64__) || defined(__arm__)
++    __asm__ volatile("yield" ::: "memory");
++#endif
++}
++
++/// A prefetch of the line at `p` into the outer cache levels (x86 `prefetcht1`; elsewhere the compiler's builtin).
++inline void prefetch_l2(const void* p) {
++#if BASALT_X86
++    _mm_prefetch((const char*) p, _MM_HINT_T1);
++#else
++    __builtin_prefetch(p, 0, 2);
+ #endif
+ }
+ 
+@@ -84,7 +107,9 @@ inline float f16_round(float x) {
+ 
+ /// Whether this CPU, and the OS saving its AVX-512 state, can run AVX512_BF16 with AVX512BW.
+ inline bool cpu_has_avx512_bf16() {
+-#if defined(_MSC_VER)
++#if !BASALT_X86
++    return false;
++#elif defined(_MSC_VER)
+     // The same readings GCC's run-time probe takes: the OS has to save the AVX-512 state, and leaf 7 subleaf 0
+     // names AVX512BW (EBX bit 30) and AVX512_BF16 (ECX bit 5).
+     unsigned r[4];
+diff --git a/src/core/graph.cpp b/src/core/graph.cpp
+index 46759d5..9296883 100644
+--- a/src/core/graph.cpp
++++ b/src/core/graph.cpp
+@@ -1,7 +1,7 @@
+ // src/core/graph.cpp - the GraphRegistry implementation.
+ #include "basalt/core/graph.hpp"
+ 
+-#include <immintrin.h>
++#include "basalt/platform/compiler.hpp"
+ 
+ #include <chrono>
+ #include <cstdio>
+@@ -97,7 +97,7 @@ bool CapturedGraph::wait_ms(int timeout_ms) const {
+         if (q == cudaSuccess) return true;
+         if (q != cudaErrorNotReady) return false;   // a real error, not "not finished"
+         if (std::chrono::steady_clock::now() >= deadline) return false;
+-        for (int i = 0; i < 64; ++i) _mm_pause();
++        for (int i = 0; i < 64; ++i) basalt::platform::cpu_relax();
+     }
+ }
+ 
+diff --git a/src/kernels/cpu/pool.cpp b/src/kernels/cpu/pool.cpp
+index 1b50873..b1339a7 100644
+--- a/src/kernels/cpu/pool.cpp
++++ b/src/kernels/cpu/pool.cpp
+@@ -6,7 +6,7 @@
+ #include <algorithm>
+ #include <cmath>
+ #include <chrono>
+-#include <immintrin.h>
++#include "basalt/platform/compiler.hpp"
+ 
+ #include <cstdio>
+ #include <cstdlib>
+@@ -159,7 +159,7 @@ void ExpertPool::worker(int id) {
+         uint32_t spins = 0;
+         while (epoch_.load(std::memory_order_acquire) == seen) {
+             if (stop_.load(std::memory_order_relaxed)) return;
+-            _mm_pause();
++            basalt::platform::cpu_relax();
+             if ((++spins & 63u) != 0) continue;
+             const auto now = std::chrono::steady_clock::now();
+             if (now - parked_at < spin_before_sleep_) {
+@@ -230,7 +230,7 @@ void ExpertPool::wait_parked(const char* what) {
+     hstate_ms_.store(now_ms(), std::memory_order_relaxed);
+     StallClock clock;
+     while (parked_.load(std::memory_order_acquire) != (uint32_t) n_) {
+-        _mm_pause();
++        basalt::platform::cpu_relax();
+         if (clock.expired(parked_.load(std::memory_order_relaxed))) {
+             basalt::log::error("basalt", "the CPU expert pool stalled %s (%u of %d workers parked) - stopping the engine "
+                                  "so the server can start it again",
+@@ -247,7 +247,7 @@ void ExpertPool::wait_done(int n) {
+     for (;;) {
+         const uint32_t d = done_.load(std::memory_order_acquire);
+         if (d >= (uint32_t) n) return;                                // `>=`: never a wait that an overshoot outlives
+-        _mm_pause();
++        basalt::platform::cpu_relax();
+         if (clock.expired(d)) {                                       // progress restarts the clock
+             basalt::log::error("basalt", "the CPU expert pool stalled: %u of %d jobs done, %u of %d workers parked - "
+                                  "stopping the engine so the server can start it again",
+@@ -260,7 +260,7 @@ void ExpertPool::wait_done(int n) {
+ void ExpertPool::wait_ready(int e) {
+     StallClock clock;
+     while (fused_[(size_t) e].ready.load(std::memory_order_acquire) == 0) {
+-        _mm_pause();
++        basalt::platform::cpu_relax();
+         if (clock.expired(done_.load(std::memory_order_relaxed))) {
+             basalt::log::error("basalt", "the CPU expert pool stalled: the gate/up rows of expert %d of the batch did not finish "
+                                  "(%u of %d tasks done, %u of %d workers parked) - stopping the engine so the server can "
+@@ -320,7 +320,7 @@ int ExpertPool::part_row(int part, int parts, int rows) const {
+ void ExpertPool::prefetch_until_ready(int e, const uint8_t* p, size_t bytes) const {
+     // into L2 (a part is tens of KB, more than L1 holds), checking every 4 KB whether the wait is already over
+     for (size_t o = 0; o < bytes; o += 64) {
+-        _mm_prefetch((const char*) p + o, _MM_HINT_T1);
++        basalt::platform::prefetch_l2((const char*) p + o);
+         if ((o & 4095) == 4032 && fused_[(size_t) e].ready.load(std::memory_order_relaxed) != 0) return;
+     }
+ }
+diff --git a/tests/platform/compiler_test.cpp b/tests/platform/compiler_test.cpp
+index f5509b5..87baca7 100644
+--- a/tests/platform/compiler_test.cpp
++++ b/tests/platform/compiler_test.cpp
+@@ -28,9 +28,14 @@ int main() {
+     std::memcpy(vendor + 4, &r[3], 4);
+     std::memcpy(vendor + 8, &r[2], 4);
+     std::printf("compiler: cpuid vendor %s, highest leaf %u\n", vendor, r[0]);
++#if BASALT_X86
+     check(r[0] >= 1 && vendor[0] != 0, "cpuid leaf 0 names a vendor");
+     cpuid(1, 0, r);
+     if (((r[2] >> 27) & 1u) != 0) check((xgetbv0() & 0x1) != 0, "XCR0 reports x87 state when OSXSAVE is set");
++#else
++    check(r[0] == 0 && vendor[0] == 0 && xgetbv0() == 0, "off x86, cpuid and xgetbv read zeros (every x86 probe: absent)");
++    check(!cpu_has_avx512_bf16(), "off x86, no AVX-512 BF16");
++#endif
+ 
+     check(ctz32(1) == 0 && ctz32(0x80000000u) == 31 && ctz32(0x00f0u) == 4 && ctz32(0xffffffffu) == 0, "ctz32");
+     for (int i = 0; i < 4; ++i) cpu_relax();

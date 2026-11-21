@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sparkstone by Zoros</title>
+<meta name="description" content="Sparkstone: native NVFP4 MoE inference on NVIDIA DGX Spark. The Basalt engine ported to GB10, with twin-Spark serving. Open source by Zoros.">
+<meta property="og:title" content="Sparkstone: local AI, struck from stone">
+<meta property="og:description" content="Inkling 2 Mini at native NVFP4 on NVIDIA DGX Spark. Open source, by Zoros.">
+<meta property="og:image" content="social-card-1200x630.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="sparkstone-mark-64.png">
+<style>
+:root{--bg:#FFFFFF;--bg2:#F5F6F8;--fg:#14171C;--muted:#5A626E;--line:#E3E6EA;--accent:#FF8A2A;--accent2:#FF5A1F;--card:#FFFFFF;--code:#0F1217;--codefg:#E8EAED}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0B0D11;--bg2:#12151B;--fg:#F3F4F6;--muted:#A7AFBA;--line:#232831;--card:#12151B;--code:#07080B}}
+:root[data-theme="dark"]{--bg:#0B0D11;--bg2:#12151B;--fg:#F3F4F6;--muted:#A7AFBA;--line:#232831;--card:#12151B;--code:#07080B}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.6 Inter,"Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif}
+a{color:var(--accent2)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+header{border-bottom:1px solid var(--line)}
+nav{display:flex;align-items:center;justify-content:space-between;height:64px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:22px;letter-spacing:-.5px;color:var(--fg);text-decoration:none}
+.brand .mark{width:34px;height:34px}
+.brand span{color:var(--accent)}
+.brand b{font-weight:800}
+.navlinks{display:flex;gap:20px;font-size:15px}
+.navlinks a{color:var(--muted);text-decoration:none}
+.navlinks a:hover{color:var(--fg)}
+.hero{padding:72px 0 56px;background:radial-gradient(700px 360px at 80% 10%,rgba(255,138,42,.16),transparent 60%)}
+.hero-grid{display:grid;grid-template-columns:1.25fr .75fr;gap:40px;align-items:center}
+.eyebrow{display:inline-block;font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent2);border:1px solid rgba(255,138,42,.45);border-radius:999px;padding:4px 12px}
+h1{font-size:clamp(36px,6vw,62px);line-height:1.05;letter-spacing:-1.5px;margin:18px 0 18px;font-weight:800}
+h1 em{font-style:normal;color:var(--accent)}
+.lede{font-size:clamp(17px,2.2vw,20px);color:var(--muted);max-width:640px}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
+.btn{display:inline-block;padding:12px 20px;border-radius:10px;font-weight:700;text-decoration:none;font-size:16px}
+.btn.primary{background:var(--accent);color:#14171C}
+.btn.ghost{border:1px solid var(--line);color:var(--fg)}
+.hero .mark{width:100%;max-width:300px;justify-self:center}
+section{padding:56px 0;border-top:1px solid var(--line)}
+h2{font-size:clamp(26px,3.6vw,36px);letter-spacing:-.8px;margin:0 0 10px}
+.sub{color:var(--muted);margin:0 0 28px;max-width:720px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px}
+.card h3{margin:0 0 6px;font-size:18px}
+.card p{margin:0;color:var(--muted);font-size:15px}
+.status{width:100%;border-collapse:collapse;font-size:15px}
+.status td{padding:12px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.status td:first-child{white-space:nowrap;font-weight:700}
+.ok{color:#1F9D55}.wait{color:var(--accent2)}
+pre{background:var(--code);color:var(--codefg);border-radius:12px;padding:18px;overflow-x:auto;font:14px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:0}
+.twin-row{display:grid;grid-template-columns:.8fr 1.2fr;gap:36px;align-items:center}
+.twin{width:100%;max-width:380px}
+.note{font-size:14px;color:var(--muted)}
+footer{border-top:1px solid var(--line);padding:32px 0 48px;font-size:14px;color:var(--muted)}
+footer p{margin:6px 0}
+@media (max-width:820px){.hero-grid,.twin-row{grid-template-columns:1fr}.grid3{grid-template-columns:1fr}.hero .mark{max-width:180px;order:-1}.navlinks{display:none}.status td:first-child{white-space:normal}}
+</style>
+</head>
+<body>
+<header><div class="wrap"><nav>
+  <a class="brand" href="#"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" class="mark" aria-hidden="true">
+  
+  <defs>
+    <linearGradient id="ss-spark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFE29A"/>
+      <stop offset="0.45" stop-color="#FFB03A"/>
+      <stop offset="1" stop-color="#FF5A1F"/>
+    </linearGradient>
+    <linearGradient id="ss-ember" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC24A"/>
+      <stop offset="1" stop-color="#FF4A1C" stop-opacity="0.15"/>
+    </linearGradient>
+    <radialGradient id="ss-glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFB03A" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#FFB03A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <!-- basalt column: hexagonal prism, three visible faces + top -->
+  <polygon points="196,100 162,129.4 162,232 196,202.6" fill="#2A2E35"/>
+  <polygon points="162,129.4 94,129.4 94,232 162,232" fill="#363B44"/>
+  <polygon points="94,129.4 60,100 60,202.6 94,232" fill="#22262C"/>
+  <polygon points="196,100 162,129.4 94,129.4 60,100 94,70.6 162,70.6" fill="#4A515C"/>
+  <polygon points="196,100 162,129.4 94,129.4 60,100 94,70.6 162,70.6" fill="none" stroke="#5C6470" stroke-width="2"/>
+  <!-- ember fissure on the front face -->
+  <polyline points="134,129.4 126,152 136,170 122,194 130,214 124,232" fill="none" stroke="url(#ss-ember)"
+            stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- the spark, struck from the top -->
+  <circle cx="160" cy="62" r="46" fill="url(#ss-glow)"/>
+  <path d="M160 14 L168 52 L206 62 L168 72 L160 110 L152 72 L114 62 L152 52 Z" fill="url(#ss-spark)"/>
+  <circle cx="204" cy="26" r="5" fill="#FFC24A"/>
+  <circle cx="218" cy="48" r="3" fill="#FF8A2A"/>
+  <circle cx="112" cy="24" r="3.5" fill="#FFD27A"/>
+</svg><b>spark<span>stone</span></b></a>
+  <div class="navlinks"><a href="#what">What</a><a href="#status">Status</a><a href="#twin">Twin</a><a href="#start">Get started</a><a href="https://github.com/zoros-ai/sparkstone">GitHub</a></div>
+</nav></div></header>
+
+<div class="hero"><div class="wrap hero-grid">
+  <div>
+    <span class="eyebrow">Open source · by Zoros</span>
+    <h1>Local AI, <em>struck from stone</em>.</h1>
+    <p class="lede">Sparkstone runs Thinking Machines’ Inkling&nbsp;2&nbsp;Mini at native NVFP4 on the NVIDIA DGX&nbsp;Spark on your desk, with more open models to follow.
+    It ports the Basalt inference engine to GB10, and it can put two Sparks behind one endpoint.</p>
+    <div class="cta"><a class="btn primary" href="https://github.com/zoros-ai/sparkstone">View on GitHub</a>
+    <a class="btn ghost" href="#start">Get started</a></div>
+  </div>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" class="mark" aria-hidden="true">
+  
+  <defs>
+    <linearGradient id="hero-spark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFE29A"/>
+      <stop offset="0.45" stop-color="#FFB03A"/>
+      <stop offset="1" stop-color="#FF5A1F"/>
+    </linearGradient>
+    <linearGradient id="hero-ember" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC24A"/>
+      <stop offset="1" stop-color="#FF4A1C" stop-opacity="0.15"/>
+    </linearGradient>
+    <radialGradient id="hero-glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFB03A" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#FFB03A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <!-- basalt column: hexagonal prism, three visible faces + top -->
+  <polygon points="196,100 162,129.4 162,232 196,202.6" fill="#2A2E35"/>
+  <polygon points="162,129.4 94,129.4 94,232 162,232" fill="#363B44"/>
+  <polygon points="94,129.4 60,100 60,202.6 94,232" fill="#22262C"/>
+  <polygon points="196,100 162,129.4 94,129.4 60,100 94,70.6 162,70.6" fill="#4A515C"/>
+  <polygon points="196,100 162,129.4 94,129.4 60,100 94,70.6 162,70.6" fill="none" stroke="#5C6470" stroke-width="2"/>
+  <!-- ember fissure on the front face -->
+  <polyline points="134,129.4 126,152 136,170 122,194 130,214 124,232" fill="none" stroke="url(#hero-ember)"
+            stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- the spark, struck from the top -->
+  <circle cx="160" cy="62" r="46" fill="url(#hero-glow)"/>
+  <path d="M160 14 L168 52 L206 62 L168 72 L160 110 L152 72 L114 62 L152 52 Z" fill="url(#hero-spark)"/>
+  <circle cx="204" cy="26" r="5" fill="#FFC24A"/>
+  <circle cx="218" cy="48" r="3" fill="#FF8A2A"/>
+  <circle cx="112" cy="24" r="3.5" fill="#FFD27A"/>
+</svg>
+
+</div></div>
+
+<section id="what"><div class="wrap">
+  <h2>What it is</h2>
+  <p class="sub">The engine behind the "Inkling 2 Mini at 613 tok/s on one RTX 5090" results only ran on x86 PCs with an RTX 50-series card.
+  Sparkstone brings it to the DGX Spark's Grace Blackwell chip without rewriting a kernel.</p>
+  <div class="grid3">
+    <div class="card"><h3>GB10 native</h3><p>Every NVFP4 and FP8 kernel is built for sm_121, and the host builds for Arm. Five small patches, offered upstream.</p></div>
+    <div class="card"><h3>128 GB, one address space</h3><p>No spilling experts over a PCIe bus. The GPU reads the whole model and a 1M-token context in unified memory.</p></div>
+    <div class="card"><h3>Proven, then published</h3><p>A one-command self-test runs the GPU parity suite and the community benchmark on your own Spark.</p></div>
+  </div>
+</div></section>
+
+<section id="status"><div class="wrap">
+  <h2>Where it stands</h2>
+  <p class="sub">We only publish numbers we have measured. These rows are kept up to date.</p>
+  <table class="status">
+    <tr><td class="ok">✓ Builds for GB10</td><td>All 45 GPU code objects target sm_121; block-scaled FP4 tensor-core instructions assemble for sm_121a.</td></tr>
+    <tr><td class="ok">✓ Runs on Arm</td><td>Basalt's CPU test suite passes 78/78 on AArch64. One upstream race the port exposed is fixed.</td></tr>
+    <tr><td class="ok">✓ Twin router</td><td>Two Sparks, one OpenAI/Anthropic-compatible endpoint, conversation affinity, failover.</td></tr>
+    <tr><td class="wait">● On hardware</td><td>GPU parity, quality and speed on DGX Spark: in progress. Projected 37–59 tok/s chat and 91–145 tok/s structured output, single stream.</td></tr>
+  </table>
+</div></section>
+
+<section id="twin"><div class="wrap twin-row">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 256" class="twin" aria-hidden="true">
+  
+  <defs>
+    <linearGradient id="tw-spark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFE29A"/>
+      <stop offset="0.45" stop-color="#FFB03A"/>
+      <stop offset="1" stop-color="#FF5A1F"/>
+    </linearGradient>
+    <linearGradient id="tw-ember" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC24A"/>
+      <stop offset="1" stop-color="#FF4A1C" stop-opacity="0.15"/>
+    </linearGradient>
+    <radialGradient id="tw-glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFB03A" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#FFB03A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g transform="translate(-40,0)"><!-- basalt column: hexagonal prism, three visible faces + top -->
+  <polygon points="196,100 162,129.4 162,232 196,202.6" fill="#2A2E35"/>
+  <polygon points="162,129.4 94,129.4 94,232 162,232" fill="#363B44"/>
+  <polygon points="94,129.4 60,100 60,202.6 94,232" fill="#22262C"/>
+  <polygon points="196,100 162,129.4 94,129.4 60,100 94,70.6 162,70.6" fill="#4A515C"/>
+  <polygon points="196,100 162,129.4 94,129.4 60,100 94,70.6 162,70.6" fill="none" stroke="#5C6470" stroke-width="2"/>
+  <!-- ember fissure on the front face -->
+  <polyline points="134,129.4 126,152 136,170 122,194 130,214 124,232" fill="none" stroke="url(#tw-ember)"
+            stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <g transform="translate(204,0)"><!-- basalt column: hexagonal prism, three visible faces + top -->
+  <polygon points="196,100 162,129.4 162,232 196,202.6" fill="#2A2E35"/>
+  <polygon points="162,129.4 94,129.4 94,232 162,232" fill="#363B44"/>
+  <polygon points="94,129.4 60,100 60,202.6 94,232" fill="#22262C"/>
+  <polygon points="196,100 162,129.4 94,129.4 60,100 94,70.6 162,70.6" fill="#4A515C"/>
+  <polygon points="196,100 162,129.4 94,129.4 60,100 94,70.6 162,70.6" fill="none" stroke="#5C6470" stroke-width="2"/>
+  <!-- ember fissure on the front face -->
+  <polyline points="134,129.4 126,152 136,170 122,194 130,214 124,232" fill="none" stroke="url(#tw-ember)"
+            stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <!-- one spark between the two columns: the 200 GbE link -->
+  <path d="M146 128 H274" stroke="#FF8A2A" stroke-width="3" stroke-dasharray="2 9" stroke-linecap="round"/>
+  <g transform="translate(50,6)"><!-- the spark, struck from the top -->
+  <circle cx="160" cy="62" r="46" fill="url(#tw-glow)"/>
+  <path d="M160 14 L168 52 L206 62 L168 72 L160 110 L152 72 L114 62 L152 52 Z" fill="url(#tw-spark)"/>
+  <circle cx="204" cy="26" r="5" fill="#FFC24A"/>
+  <circle cx="218" cy="48" r="3" fill="#FF8A2A"/>
+  <circle cx="112" cy="24" r="3.5" fill="#FFD27A"/>
+</g>
+</svg>
+
+  <div>
+    <h2>Sparkstone Twin</h2>
+    <p class="sub">Cable two Sparks together and serve them as one machine: double the throughput and double the context
+    pool, with conversation-aware routing that keeps each chat on the Spark holding its cache. Splitting each token
+    across both Sparks over the 200 GbE link comes next, once our link-latency measurements show it pays off.</p>
+  </div>
+</div></section>
+
+<section id="start"><div class="wrap">
+  <h2>Get started</h2>
+  <p class="sub">On a DGX Spark with DGX OS 7 and CUDA 13:</p>
+<pre>git clone https://github.com/zoros-ai/sparkstone &amp;&amp; cd sparkstone
+scripts/spark-preflight.sh
+scripts/build-spark.sh
+scripts/download-model.sh
+scripts/serve-spark.sh          # OpenAI + Anthropic API on :8080
+
+FULL=1 scripts/selftest.sh      # full hardware report</pre>
+  <p class="note" style="margin-top:14px">Need it running across a fleet, air-gapped, or tuned for your models? <a href="mailto:hello@zoros.com">Talk to Zoros</a>.</p>
+</div></section>
+
+<footer><div class="wrap">
+  <p><b>Credits.</b> Sparkstone is built on <a href="https://github.com/jesdga95/basalt">Basalt</a> by Jesús Gulfo (MIT), which builds on Strata, Infernix and ggml.
+  Inkling 2 Mini is by Thinking Machines Lab (Apache-2.0).</p>
+  <p>Sparkstone code: Apache-2.0. "Sparkstone" and its logos are trademarks of Zoros. NVIDIA, DGX Spark and GB10 are trademarks of NVIDIA Corporation.
+  Sparkstone is independent and not affiliated with or endorsed by NVIDIA, the Basalt project or Thinking Machines Lab.</p>
+  <p>© 2026 Zoros</p>
+</div></footer>
+</body>
+</html>

@@ -1,0 +1,64 @@
+name: ci
+# Hosted runners have no GPU: CI proves the GB10 build (sm_121 cubins, AArch64 host) and runs the CPU suite under
+# qemu-aarch64. GPU parity and speed need a DGX Spark: scripts/selftest.sh.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tooling:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: router tests
+        run: python3 -m unittest discover -s router -v
+      - name: performance model runs
+        run: python3 tools/perf_model.py && python3 tools/perf_model.py --json > /dev/null
+      - name: shell syntax
+        run: for f in scripts/*.sh scripts/*/*.sh; do bash -n "$f"; done
+
+  gb10-cross:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchains
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq g++-13-aarch64-linux-gnu qemu-user qemu-user-binfmt cmake python3-venv
+          pip install regex   # convert_tests imports the tokenizer
+      - name: engine (pinned upstream + patches)
+        run: scripts/fetch-engine.sh
+      - name: CUDA 13.0 root for aarch64 (PyPI wheels)
+        run: scripts/cross/make-cuda-aarch64-root.sh "$HOME/.cuda-aarch64"
+      - name: configure
+        run: |
+          cmake -S engine -B engine/build-gb10 --toolchain cmake/aarch64-gb10-cross.cmake \
+            -DCUDAToolkit_ROOT=$HOME/.cuda-aarch64/root -DCMAKE_CUDA_ARCHITECTURES=121 \
+            -DBASALT_MODELS=inkling2 -DBUILD_TESTING=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/qemu-aarch64
+      - name: host sources compile for AArch64
+        run: python3 tools/check_aarch64_host.py engine/build-gb10
+      - name: build
+        run: cmake --build engine/build-gb10 -j "$(nproc)"
+      - name: only sm_121 cubins
+        run: |
+          python3 tools/cubin_archs.py engine/bin/basalt | tee cubins.txt
+          grep -q "'sm_121'" cubins.txt && ! grep -q "'sm_120'" cubins.txt
+          file engine/bin/basalt | grep -q aarch64
+      - name: CPU tests on AArch64 (qemu)
+        env:
+          QEMU_LD_PREFIX: /usr/aarch64-linux-gnu
+        run: |
+          export LD_LIBRARY_PATH=$HOME/.cuda-aarch64/aarch64/nvidia/cu13/lib
+          cd engine/build-gb10 && ctest -L cpu -j "$(nproc)" --output-on-failure --timeout 900

@@ -1,0 +1,268 @@
+From 081b9278174580c5f9db56344ce268f722dbf3f7 Mon Sep 17 00:00:00 2001
+From: Sparkstone (Zoros) <sparkstone@users.noreply.github.com>
+Date: Sat, 21 Nov 2026 20:55:26 +0000
+Subject: [PATCH 1/5] build: target sm_121 (GB10 / DGX Spark) as well as sm_120
+
+CMAKE_CUDA_ARCHITECTURES accepts 120 or 121 (one of them per build). The
+arch-specific targets that hold the block-scaled MMA and FP4 converts take
+${BASALT_SM}a-real instead of a hard-coded 120a-real, since an sm_120a cubin
+does not load on compute capability 12.1. The build passes BASALT_BUILT_SM to
+the code; the GPU checks accept the card this build was compiled for, and a
+consumer-Blackwell card of the other minor version is told which
+-DCMAKE_CUDA_ARCHITECTURES to rebuild with. Messages and behaviour of an
+sm_120 build are unchanged.
+
+The gpu_select and multi_gpu_plan fixtures' "12.0" cards stand for a card of
+the build's architecture, so the tests pass on both builds.
+
+Every instruction the kernels use (mma.sync kind::mxf4nvf4 / mxf8f6f4
+block_scale, cvt e2m1x2, TMA, mbarrier, setmaxnreg) assembles for sm_121a
+with CUDA 13.0, and an Inkling 2 Mini build links with sm_121 cubins only.
+---
+ CMakeLists.txt                        | 31 ++++++++++++++++++---------
+ src/models/deepseek41/model.cpp       |  2 +-
+ src/program/gpu_select.cpp            | 29 ++++++++++++++++++-------
+ tests/program/gpu_select_test.cpp     | 20 +++++++++++++----
+ tests/program/multi_gpu_plan_test.cpp |  6 +++++-
+ 5 files changed, 64 insertions(+), 24 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index a9f05a8..e94b592 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -40,19 +40,30 @@ endfunction()
+ # the CUDA language gives the .cu compile rules but not the imported targets, so `CUDA::cudart` is brought in
+ # explicitly for the host-side programs that call the runtime themselves
+ find_package(CUDAToolkit REQUIRED)
+-# Main kernels (NVFP4 tensor cores, TMA, Blackwell instructions) compile for sm_120 only.
++# Main kernels (NVFP4 tensor cores, TMA, Blackwell instructions) compile for ONE consumer-Blackwell target of the
++# sm_12x family: 120 (RTX 50-series, RTX PRO Blackwell) or 121 (GB10: DGX Spark and its OEM twins). The two share the
++# instructions the engine uses (mma.sync block-scaled FP4/FP8, cvt e2m1, TMA, mbarrier, setmaxnreg), but an
++# arch-specific ("a") cubin runs only on its own minor version, so the build names the one it is for.
+ # When PEER_ADA is enabled, peer kernels (Q8_1/Q2_0 expert rows, standard CUDA) additionally compile
+ # for sm_89 (Ada) so a non-Blackwell card can serve as the expert tier.
++set(BASALT_SM "")
+ foreach(_a IN LISTS CMAKE_CUDA_ARCHITECTURES)
+-  string(REGEX REPLACE "[-a].*$" "" _base "${_a}")     # 120-real / 120a are still 120
+-  if(NOT _base STREQUAL "120")
+-    message(FATAL_ERROR "CMAKE_CUDA_ARCHITECTURES is '${CMAKE_CUDA_ARCHITECTURES}': basalt builds for compute capability 12.0 only (peer-arch kernels are compiled separately below)")
++  string(REGEX REPLACE "[-a].*$" "" _base "${_a}")     # 120-real / 120a / 121a are still 120 / 121
++  if(NOT _base MATCHES "^12[01]$")
++    message(FATAL_ERROR "CMAKE_CUDA_ARCHITECTURES is '${CMAKE_CUDA_ARCHITECTURES}': basalt builds for compute capability 12.0 or 12.1 only (peer-arch kernels are compiled separately below)")
+   endif()
++  if(BASALT_SM AND NOT BASALT_SM STREQUAL _base)
++    message(FATAL_ERROR "CMAKE_CUDA_ARCHITECTURES is '${CMAKE_CUDA_ARCHITECTURES}': name one of 120 and 121, not both (the arch-specific kernels are built for one)")
++  endif()
++  set(BASALT_SM "${_base}")
+ endforeach()
++# the arch-specific targets (block-scaled mma, FP4 converts) take this one
++set(BASALT_SM_ARCH_SPECIFIC "${BASALT_SM}a-real")
++add_compile_definitions(BASALT_BUILT_SM=${BASALT_SM})
+ if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 13.0)
+   message(FATAL_ERROR "CUDA ${CMAKE_CUDA_COMPILER_VERSION}: basalt needs CUDA 13.0 or newer")
+ endif()
+-message(STATUS "basalt: CUDA arch ${CMAKE_CUDA_ARCHITECTURES}")
++message(STATUS "basalt: CUDA arch ${CMAKE_CUDA_ARCHITECTURES} (sm_${BASALT_SM}, arch-specific ${BASALT_SM_ARCH_SPECIFIC})")
+ set(_gpu_runtime_target CUDA::cudart)
+ set(_gpu_blas_target CUDA::cublas)
+ set(_gpu_include_directories ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+@@ -939,7 +950,7 @@ basalt_gpu_test(NAME window_gemm_two_gpu COMMAND window_gemm_two_gpu)
+ set_tests_properties(window_gemm_two_gpu PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
+ # the FP8 and FP4 codes as bf16x2 (narrow_bf16.cuh): the direct cvt (CUDA 13.2+) and the f16 route, every input
+ add_executable(narrow_bf16_parity tests/kernels/narrow_bf16_parity.cu)
+-set_target_properties(narrow_bf16_parity PROPERTIES CUDA_ARCHITECTURES 120a-real)
++set_target_properties(narrow_bf16_parity PROPERTIES CUDA_ARCHITECTURES ${BASALT_SM_ARCH_SPECIFIC})
+ target_include_directories(narrow_bf16_parity PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+ target_link_libraries(narrow_bf16_parity PRIVATE ${_gpu_runtime_target})
+ basalt_gpu_test(NAME narrow_bf16_parity COMMAND narrow_bf16_parity)
+@@ -1780,7 +1791,7 @@ target_link_libraries(model_qwen4exp_prefill PUBLIC model_qwen4exp_moe_fused)
+ endif()
+ # a prompt chunk's products against FP8 E4M3 weights on the FP8 tensor cores (W8A8)
+ add_library(prefill_fp8 STATIC src/prefill/fp8_gemm.cu)
+-set_target_properties(prefill_fp8 PROPERTIES CUDA_ARCHITECTURES 120a-real)   # the block-scaled mma
++set_target_properties(prefill_fp8 PROPERTIES CUDA_ARCHITECTURES ${BASALT_SM_ARCH_SPECIFIC})   # the block-scaled mma
+ target_include_directories(prefill_fp8 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+ target_link_libraries(prefill_fp8 PUBLIC core ${_gpu_runtime_target})
+ if(BUILD_TESTING)
+@@ -1803,11 +1814,11 @@ endif()
+ # a decode window's products against FP8 and NVFP4 matrices (the NVFP4 codes convert with sm_120a instructions)
+ add_library(window_gemm STATIC src/kernels/cuda/window_gemm.cu src/kernels/cuda/window_gemm_f8.cu
+                                src/kernels/cuda/window_gemm_nvfp4.cu)
+-set_target_properties(window_gemm PROPERTIES CUDA_ARCHITECTURES 120a-real)
++set_target_properties(window_gemm PROPERTIES CUDA_ARCHITECTURES ${BASALT_SM_ARCH_SPECIFIC})
+ target_include_directories(window_gemm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+ target_link_libraries(window_gemm PUBLIC core ${_gpu_runtime_target})
+ add_library(prefill_fp4 STATIC src/prefill/moe_fp4.cu src/prefill/fp4_dense.cu)
+-set_target_properties(prefill_fp4 PROPERTIES CUDA_ARCHITECTURES 120a-real)
++set_target_properties(prefill_fp4 PROPERTIES CUDA_ARCHITECTURES ${BASALT_SM_ARCH_SPECIFIC})
+ target_include_directories(prefill_fp4 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+ target_link_libraries(prefill_fp4 PUBLIC mmq ${_gpu_runtime_target})
+ if(BASALT_MODEL_QWEN4EXP)
+@@ -1890,7 +1901,7 @@ if(BUILD_TESTING)
+   set_tests_properties(fp4_dense_tma_test PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
+   # the SwiGLU epilogue's branch-free SiLU quotient against the plain expression on every float (built as the product is)
+   add_executable(silu_parity tests/kernels/silu_parity.cu)
+-  set_target_properties(silu_parity PROPERTIES CUDA_ARCHITECTURES 120a-real)
++  set_target_properties(silu_parity PROPERTIES CUDA_ARCHITECTURES ${BASALT_SM_ARCH_SPECIFIC})
+   target_include_directories(silu_parity PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+   target_link_libraries(silu_parity PRIVATE ${_gpu_runtime_target})
+   basalt_gpu_test(NAME silu_parity COMMAND silu_parity)
+diff --git a/src/models/deepseek41/model.cpp b/src/models/deepseek41/model.cpp
+index 41708c9..c5aba46 100644
+--- a/src/models/deepseek41/model.cpp
++++ b/src/models/deepseek41/model.cpp
+@@ -265,7 +265,7 @@ model::Result DsModel::plan(const model::LoadRequest& req, core::LoadPlan& reads
+     // peer card here rather than failing at its first launch with 'no kernel image'.
+     for (int dev : peers) {
+         cudaDeviceProp prop{};
+-        if (cudaGetDeviceProperties(&prop, dev) == cudaSuccess && prop.major != 0 && !(prop.major == 12 && prop.minor == 0))
++        if (cudaGetDeviceProperties(&prop, dev) == cudaSuccess && prop.major != 0 && !(prop.major * 10 + prop.minor == BASALT_BUILT_SM))
+             return {model::Status::Error, "deepseek41: GPU " + std::to_string(dev) + " (" + prop.name +
+                                               ") is not sm_120: the DeepSeek peer-tier kernels are built for Blackwell only"};
+     }
+diff --git a/src/program/gpu_select.cpp b/src/program/gpu_select.cpp
+index 9c6cc59..0a88efb 100644
+--- a/src/program/gpu_select.cpp
++++ b/src/program/gpu_select.cpp
+@@ -133,18 +133,27 @@ bool parse_gpu_spec(const std::string& text, GpuSpec& out, std::string& err) {
+     return true;
+ }
+ 
+-// The main GPU runs the model's decode kernels (NVFP4 tensor cores, Blackwell instructions) — sm_120 only.
++// The main GPU runs the model's decode kernels (NVFP4 tensor cores, Blackwell instructions): a consumer-Blackwell
++// card of the compute capability this build was compiled for, 12.0 (sm_120) or 12.1 (sm_121, GB10 / DGX Spark).
++// The arch-specific kernels run only on the minor version they were built for, so a card of the other one is refused
++// here rather than failing later with 'no kernel image'.
+ // A peer GPU runs only the expert tier's standard CUDA kernels (Q8_1/Q2_0 rows, shared-memory rings,
+ // doorbells), which a build with -DPEER_ADA=ON also compiles for sm_89 (Ada).
+-bool gpu_main_supported(const GpuCard& c) { return c.cc_major == 0 || (c.cc_major == 12 && c.cc_minor == 0); }
++#ifndef BASALT_BUILT_SM
++#define BASALT_BUILT_SM 120
++#endif
++static bool gpu_is_built_sm(const GpuCard& c) {
++    return c.cc_major == BASALT_BUILT_SM / 10 && c.cc_minor == BASALT_BUILT_SM % 10;
++}
++bool gpu_main_supported(const GpuCard& c) { return c.cc_major == 0 || gpu_is_built_sm(c); }
+ // sm_89 (Ada) is the one older architecture the peer kernels can be compiled for (when built with PEER_ADA);
+ // a peer card of any other pre-Blackwell arch (or an sm_89 card without PEER_ADA) is rejected here
+ // rather than failing later with 'no kernel image' at the first peer launch.
+ bool gpu_peer_supported(const GpuCard& c) {
+ #if defined(BASALT_PEER_ADA)
+-    return c.cc_major == 0 || (c.cc_major == 12 && c.cc_minor == 0) || (c.cc_major == 8 && c.cc_minor == 9);
++    return c.cc_major == 0 || gpu_is_built_sm(c) || (c.cc_major == 8 && c.cc_minor == 9);
+ #else
+-    return c.cc_major == 0 || (c.cc_major == 12 && c.cc_minor == 0);
++    return c.cc_major == 0 || gpu_is_built_sm(c);
+ #endif
+ }
+ 
+@@ -160,7 +169,11 @@ GpuChoice choose_gpus(const GpuSpec& spec, const std::vector<GpuCard>& visible,
+     const int n = (int) visible.size();
+     auto unsupported_main = [&](int i) {
+         return "gpu: " + gpu_label(visible, i) + " is sm_" + std::to_string(visible[(size_t) i].cc_major) +
+-               std::to_string(visible[(size_t) i].cc_minor) + ", not sm_120";
++               std::to_string(visible[(size_t) i].cc_minor) + ", not sm_" + std::to_string(BASALT_BUILT_SM) +
++               (visible[(size_t) i].cc_major == 12   // another consumer Blackwell: the same engine, rebuilt for it
++                    ? " (this build's architecture; rebuild with -DCMAKE_CUDA_ARCHITECTURES=12" +
++                          std::to_string(visible[(size_t) i].cc_minor) + ")"
++                    : "");
+     };
+     if (spec.kind == GpuSpec::Kind::Auto) {
+         if (!known) {
+@@ -173,10 +186,10 @@ GpuChoice choose_gpus(const GpuSpec& spec, const std::vector<GpuCard>& visible,
+         for (int i = 0; i < n; ++i) {
+             if (gpu_main_supported(visible[(size_t) i])) main_ok.push_back(i);
+             else if (gpu_peer_supported(visible[(size_t) i])) peer_ok.push_back(i);
+-            else c.notes.push_back("gpu auto: " + gpu_label(visible, i) + " skipped, not sm_120");
++            else c.notes.push_back("gpu auto: " + gpu_label(visible, i) + " skipped, not sm_" + std::to_string(BASALT_BUILT_SM));
+         }
+         if (main_ok.empty()) {
+-            c.error = n == 0 ? "gpu auto: no GPU is visible" : "gpu auto: no sm_120 GPU visible";
++            c.error = n == 0 ? "gpu auto: no GPU is visible" : "gpu auto: no sm_" + std::to_string(BASALT_BUILT_SM) + " GPU visible";
+             return c;
+         }
+         int best = main_ok[0];
+@@ -192,7 +205,7 @@ GpuChoice choose_gpus(const GpuSpec& spec, const std::vector<GpuCard>& visible,
+         for (int i : peer_ok)
+             c.cards.push_back(i);
+         for (int i : peer_ok)
+-            if (i != best) c.notes.push_back("gpu auto: " + gpu_label(visible, i) + " is not sm_120, using it as an expert-tier peer only");
++            if (i != best) c.notes.push_back("gpu auto: " + gpu_label(visible, i) + " is not sm_" + std::to_string(BASALT_BUILT_SM) + ", using it as an expert-tier peer only");
+         return c;
+     }
+     if (spec.kind == GpuSpec::Kind::Unset) {
+diff --git a/tests/program/gpu_select_test.cpp b/tests/program/gpu_select_test.cpp
+index 8a80fdf..5579b2f 100644
+--- a/tests/program/gpu_select_test.cpp
++++ b/tests/program/gpu_select_test.cpp
+@@ -22,7 +22,19 @@ static int g_fail = 0;
+ 
+ static constexpr uint64_t G = 1ull << 30;
+ 
++#ifndef BASALT_BUILT_SM
++#define BASALT_BUILT_SM 120
++#endif
++#define BUILT_SM_STR_(x) #x
++#define BUILT_SM_STR_X(x) BUILT_SM_STR_(x)
++#define BUILT_SM_STR BUILT_SM_STR_X(BASALT_BUILT_SM)
++// The fixtures name consumer-Blackwell cards as 12.0; they stand for "a card of this build's architecture", so a
++// GB10 (sm_121) build reads them as 12.1.
+ static GpuCard card(int smi, const char* name, int major, int minor, double gbps, uint64_t gib) {
++    if (major == 12 && minor == 0) {
++        major = BASALT_BUILT_SM / 10;
++        minor = BASALT_BUILT_SM % 10;
++    }
+     GpuCard c;
+     c.token = std::to_string(smi);
+     c.smi = smi;
+@@ -121,7 +133,7 @@ int main() {
+         GpuChoice c = pick("auto", v);
+         CHECK_STR(cards(c), "2,0,3");
+         CHECK(c.notes.size() == 1);
+-        if (c.notes.size() == 1) CHECK_STR(c.notes[0], "gpu auto: GPU 1 (RTX 3090) skipped, not sm_120");
++        if (c.notes.size() == 1) CHECK_STR(c.notes[0], "gpu auto: GPU 1 (RTX 3090) skipped, not sm_" BUILT_SM_STR);
+         CHECK_STR(roles(v, c, 1), "main,expert tier,idle");
+         CHECK_STR(roles(v, c, 3), "main,expert tier,expert tier");
+         CHECK_STR(roles(v, c, 1, true), "main,prompt split,idle");
+@@ -129,13 +141,13 @@ int main() {
+         c = pick("", v);
+         CHECK_STR(cards(c), "0");
+         CHECK_STR(c.warning, "GPU 2 (RTX 5090), GPU 3 (RTX 5060 Ti) unused; use gpu 0,2,3 or gpu auto");
+-        CHECK_STR(pick("1", v).error, "gpu: GPU 1 (RTX 3090) is sm_86, not sm_120");
++        CHECK_STR(pick("1", v).error, "gpu: GPU 1 (RTX 3090) is sm_86, not sm_" BUILT_SM_STR);
+         CHECK_STR(cards(pick("3,2,0", v)), "3,2,0");
+     }
+     // An Ada (sm_89) card: never the main card; a second card only in a -DPEER_ADA=ON build
+     {
+         const std::vector<GpuCard> v = {card(0, "RTX 5080", 12, 0, 960, 16), card(1, "RTX 4060 Ti", 8, 9, 288, 16)};
+-        CHECK_STR(pick("1,0", v).error, "gpu: GPU 1 (RTX 4060 Ti) is sm_89, not sm_120");
++        CHECK_STR(pick("1,0", v).error, "gpu: GPU 1 (RTX 4060 Ti) is sm_89, not sm_" BUILT_SM_STR);
+ #if defined(BASALT_PEER_ADA)
+         CHECK_STR(cards(pick("0,1", v)), "0,1");
+         CHECK_STR(cards(pick("auto", v)), "0,1");
+@@ -144,7 +156,7 @@ int main() {
+         GpuChoice c = pick("auto", v);
+         CHECK_STR(cards(c), "0");
+         CHECK(c.notes.size() == 1);
+-        if (c.notes.size() == 1) CHECK_STR(c.notes[0], "gpu auto: GPU 1 (RTX 4060 Ti) skipped, not sm_120");
++        if (c.notes.size() == 1) CHECK_STR(c.notes[0], "gpu auto: GPU 1 (RTX 4060 Ti) skipped, not sm_" BUILT_SM_STR);
+ #endif
+     }
+     // A laptop's own card beside a desktop card in an enclosure: the desktop card's bandwidth makes it main; the
+diff --git a/tests/program/multi_gpu_plan_test.cpp b/tests/program/multi_gpu_plan_test.cpp
+index d22e640..803656a 100644
+--- a/tests/program/multi_gpu_plan_test.cpp
++++ b/tests/program/multi_gpu_plan_test.cpp
+@@ -25,7 +25,11 @@ static GpuCard card(int smi, const char* name, double gbps, uint64_t gib) {
+     c.token = std::to_string(smi);
+     c.smi = smi;
+     c.name = name;
+-    c.cc_major = 12;
++#ifndef BASALT_BUILT_SM
++#define BASALT_BUILT_SM 120
++#endif
++    c.cc_major = BASALT_BUILT_SM / 10;   // a card of this build's architecture
++    c.cc_minor = BASALT_BUILT_SM % 10;
+     c.mem_gbps = gbps;
+     c.vram = gib * GiB;
+     return c;

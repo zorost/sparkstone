@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 256" role="img" aria-labelledby="t">
+  <title id="t">Sparkstone</title>
+  
+  <g><defs>
+    <linearGradient id="ss-spark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFE29A"/>
+      <stop offset="0.45" stop-color="#FFB03A"/>
+      <stop offset="1" stop-color="#FF5A1F"/>
+    </linearGradient>
+    <linearGradient id="ss-ember" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC24A"/>
+      <stop offset="1" stop-color="#FF4A1C" stop-opacity="0.15"/>
+    </linearGradient>
+    <radialGradient id="ss-glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFB03A" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#FFB03A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <!-- basalt column: hexagonal prism, three visible faces + top -->
+  <polygon points="196,100 162,129.4 162,232 196,202.6" fill="#2A2E35"/>
+  <polygon points="162,129.4 94,129.4 94,232 162,232" fill="#363B44"/>
+  <polygon points="94,129.4 60,100 60,202.6 94,232" fill="#22262C"/>
+  <polygon points="196,100 162,129.4 94,129.4 60,100 94,70.6 162,70.6" fill="#4A515C"/>
+  <polygon points="196,100 162,129.4 94,129.4 60,100 94,70.6 162,70.6" fill="none" stroke="#5C6470" stroke-width="2"/>
+  <!-- ember fissure on the front face -->
+  <polyline points="134,129.4 126,152 136,170 122,194 130,214 124,232" fill="none" stroke="url(#ss-ember)"
+            stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- the spark, struck from the top -->
+  <circle cx="160" cy="62" r="46" fill="url(#ss-glow)"/>
+  <path d="M160 14 L168 52 L206 62 L168 72 L160 110 L152 72 L114 62 L152 52 Z" fill="url(#ss-spark)"/>
+  <circle cx="204" cy="26" r="5" fill="#FFC24A"/>
+  <circle cx="218" cy="48" r="3" fill="#FF8A2A"/>
+  <circle cx="112" cy="24" r="3.5" fill="#FFD27A"/>
+</g>
+  <text x="262" y="150" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="112"
+        font-weight="800" letter-spacing="-3" fill="#F3F4F6">spark<tspan fill="#FF8A2A">stone</tspan></text>
+  <text x="268" y="204" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="30"
+        font-weight="600" letter-spacing="6" fill="#A7AFBA">LOCAL AI · STRUCK FROM STONE</text>
+</svg>

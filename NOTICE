@@ -1,0 +1,34 @@
+Sparkstone
+Copyright 2026 Zoros (https://zoros.com) and the Sparkstone contributors
+
+This product includes software developed by Zoros and the Sparkstone contributors, licensed under the Apache
+License, Version 2.0 (LICENSE). If you redistribute Sparkstone or a work derived from it, keep this NOTICE file
+(Apache-2.0 section 4(d)) and credit the project, e.g.:
+
+    Built with Sparkstone by Zoros - https://github.com/zoros-ai/sparkstone
+
+-------------------------------------------------------------------------------------------------------------------
+Third-party work
+
+Sparkstone builds and patches Basalt, which is NOT part of this repository's Apache-2.0 code:
+
+  * Basalt - local inference engine. Copyright (c) 2026 Jesus Gulfo. MIT License.
+    https://github.com/jesdga95/basalt
+    The files in patches/ modify Basalt and are licensed under the MIT License (patches/LICENSE), the same
+    terms as Basalt, so they can be contributed back upstream.
+  * Basalt in turn includes or adapts: Strata (MIT), Infernix (Apache-2.0, Ian Ranson and contributors),
+    ggml and llama.cpp (MIT), and ideas from NInfer. See Basalt's THIRD_PARTY_LICENSES.
+
+Models are not distributed with Sparkstone. Model weights are downloaded by the user from their publishers and
+are subject to their own licences, e.g. Thinking Machines Lab's Inkling 2 Mini (Apache-2.0).
+
+-------------------------------------------------------------------------------------------------------------------
+Trademarks
+
+"Sparkstone", the Sparkstone logo and the Sparkstone Twin logo are trademarks of Zoros. The Apache-2.0 license
+does not grant permission to use them (Apache-2.0 section 6); see TRADEMARKS.md.
+
+NVIDIA, DGX, DGX Spark, GB10, Blackwell, CUDA and ConnectX are trademarks of NVIDIA Corporation. Basalt is the name
+of Jesus Gulfo's project. Inkling is a name of Thinking Machines Lab. These names are used only to describe
+compatibility. Sparkstone is an independent project and is not affiliated with, sponsored by or endorsed by NVIDIA,
+the Basalt project or Thinking Machines Lab.

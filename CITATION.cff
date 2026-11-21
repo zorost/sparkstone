@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use Sparkstone in research, a product or a benchmark, please cite it as below and credit Basalt."
+title: "Sparkstone: the Basalt inference engine on NVIDIA DGX Spark (GB10)"
+type: software
+authors:
+  - name: "Zoros"
+    website: "https://zoros.com"
+repository-code: "https://github.com/zoros-ai/sparkstone"
+license: Apache-2.0
+version: 0.1.0
+date-released: "2026-11-21"
+keywords: [llm-inference, dgx-spark, gb10, nvfp4, moe, inkling-2-mini, cuda, aarch64]
+references:
+  - type: software
+    title: "Basalt"
+    authors:
+      - name: "Jesús Gulfo"
+    repository-code: "https://github.com/jesdga95/basalt"
+    license: MIT

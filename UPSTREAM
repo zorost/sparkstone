@@ -1,0 +1,5 @@
+# The Basalt commit the patches in patches/ apply to. scripts/fetch-engine.sh checks it out.
+repo=https://github.com/jesdga95/basalt
+commit=97e2e7110578aeb7f8708dab176b910589b35047
+version=0.5.6
+date=2026-11-21
