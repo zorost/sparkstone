@@ -4,6 +4,7 @@
 #   scripts/selftest.sh                  # stages 1-4: preflight, build, CPU + GPU tests  (~20-40 min, no model)
 #   FULL=1 scripts/selftest.sh           # + stage 5-6: download Inkling 2 Mini (19.7 GB), smoke test, benchmark
 #   PEER=192.168.100.2 FULL=1 scripts/selftest.sh   # + stage 7: twin-Spark link check (peer runs check-link.sh server)
+#   SUBMITTER=name    the name on the community benchmark row (one word, default "sparkstone")
 #
 # Writes selftest-<host>-<date>/ and a .tar.gz of it. Every stage logs to its own file; a failing stage is recorded
 # and the next one still runs, so one archive tells the whole story. Nothing leaves the machine unless you send it.
@@ -25,7 +26,8 @@ stage() {   # stage NAME CMD...: run, log, record
   local t0=$SECONDS
   ( "$@" ) > "$log" 2>&1
   local rc=$?
-  local res=$([ $rc -eq 0 ] && echo "pass" || echo "**FAIL ($rc)**")
+  local res
+  res=$([ $rc -eq 0 ] && echo "pass" || echo "**FAIL ($rc)**")
   echo "| $name | $res ($((SECONDS - t0)) s) | $name.log |" >> "$summary"
   echo "   $res  ($out/$name.log)"
   return $rc
@@ -58,7 +60,7 @@ if [ "${FULL:-0}" = 1 ]; then
       \"messages\": [{\"role\": \"user\", \"content\": \"Reply with a JSON object listing the first five prime numbers under key primes.\"}]}'
     echo; curl -fs localhost:18080/metrics | head -50 || true"
   # the upstream community preset: same fixtures and settings as every published Basalt row
-  stage 6-bench bash -c "cd '$engine' && bin/basalt-bench --community --model '$pack'"
+  stage 6-bench bash -c "cd '$engine' && bin/basalt-bench --community --submitter '${SUBMITTER:-sparkstone}' --model '$pack'"
   cp "$engine/docs/community/benchmarks.json" "$out/benchmarks.json" 2>/dev/null || true
 fi
 

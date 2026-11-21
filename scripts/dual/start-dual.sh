@@ -10,11 +10,14 @@ b=${SPARK_B:?ssh host of the second Spark}
 a_ip=${SPARK_A_IP:-192.168.100.1}
 b_ip=${SPARK_B_IP:-192.168.100.2}
 key=${API_KEY_FILE:?a file holding the API key the backends require}
-remote_root=${REMOTE_ROOT:-$root}
+# the repository on each Spark, relative to the ssh login directory (home) unless absolute
+remote_root=${REMOTE_ROOT:-sparkstone}
 for pair in "$a:$a_ip" "$b:$b_ip"; do
   host=${pair%%:*}; ip=${pair##*:}
-  ssh "$host" "cd '$remote_root' && nohup env HOST=$ip API_KEY_FILE='$key' scripts/serve-spark.sh \
-      > basalt-$host.log 2>&1 & echo started basalt on $host ($ip)"
+  # $remote_root is left unquoted on the remote side so a leading ~ expands there
+  # shellcheck disable=SC2029
+  ssh "$host" "cd $remote_root && nohup env HOST=$ip API_KEY_FILE='$key' scripts/serve-spark.sh \
+      > basalt-$host.log 2>&1 < /dev/null & echo started basalt on $host \($ip\)"
 done
 echo "waiting for both backends..."
 for ip in "$a_ip" "$b_ip"; do

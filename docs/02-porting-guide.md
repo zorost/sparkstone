@@ -102,7 +102,7 @@ scripts/cross/make-cuda-aarch64-root.sh ~/.cuda-aarch64          # CUDA 13.0 fro
 ```
 
 ```bash
-cmake -S engine -B build-gb10 --toolchain cmake/aarch64-gb10-cross.cmake \
+cmake -S engine -B build-gb10 --toolchain "$PWD/cmake/aarch64-gb10-cross.cmake" \
       -DCUDAToolkit_ROOT=$HOME/.cuda-aarch64/root -DCMAKE_CUDA_ARCHITECTURES=121 -DBASALT_MODELS=inkling2 \
       -DBUILD_TESTING=ON -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/qemu-aarch64
 ```

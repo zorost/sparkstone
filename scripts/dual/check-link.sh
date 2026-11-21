@@ -19,12 +19,12 @@ if [ "$mode" = server ]; then
     ib_write_lat -d "$hca_a" -p 18516 -a >/dev/null 2>&1
   done
 fi
-peer=${PEER:?set PEER to the other Spark's 192.168.100.x address}
+peer=${PEER:?set PEER to the address of the other Spark, e.g. 192.168.100.2}
 peer_b=${PEER_B:-${peer/192.168.100./192.168.101.}}
 {
   echo "# sparkstone link report $(date -Is) $(hostname) -> $peer / $peer_b"
   echo "## ping (MTU 9000 payload)"
-  ping -c 20 -i 0.05 -M do -s 8972 "$peer" | tail -2
+  ping -c 20 -i 0.05 -M 'do' -s 8972 "$peer" | tail -2
   echo "## RDMA write bandwidth, both halves at once (Gb/s)"
   ib_write_bw -d "$hca_a" -p 18515 --report_gbits -q 4 "$peer" | tail -3 &
   ib_write_bw -d "$hca_b" -p 18517 --report_gbits -q 4 "$peer_b" | tail -3 &

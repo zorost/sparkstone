@@ -64,7 +64,7 @@ scripts/download-model.sh           # Inkling-2-Mini-NVFP4-q8.basalt (19.7 GB)
 scripts/serve-spark.sh              # OpenAI + Anthropic API on 127.0.0.1:8080
 ```
 
-Test everything and collect one report:
+Test everything and collect one report (the full two-Spark procedure is [HARDWARE_RUNBOOK.md](HARDWARE_RUNBOOK.md)):
 
 ```bash
 FULL=1 scripts/selftest.sh
@@ -92,6 +92,8 @@ behind one endpoint. Why it is data-parallel first, and when expert-parallel pay
 | [`UPSTREAM`](UPSTREAM) | The pinned Basalt commit |
 | [`scripts/`](scripts) | Preflight, build, serve, self-test, model download; `dual/` for two Sparks, `cross/` for the CI cross toolchain |
 | [`router/`](router) | The Twin router and its tests |
+| [`bench/`](bench) | `load_test.py` (concurrent load against any OpenAI endpoint), `sanity_eval.py` (fast correctness check), `results/` |
+| [`HARDWARE_RUNBOOK.md`](HARDWARE_RUNBOOK.md) | Step by step: real numbers from one and two DGX Sparks (also the brief for a Claude session on a Spark) |
 | [`tools/`](tools) | `perf_model.py` (roofline projections), `check_aarch64_host.py`, `cubin_archs.py` |
 | [`configs/`](configs) | Basalt configs for a Spark (256K and 1M context, FP8 KV) |
 | [`cmake/`](cmake) | The AArch64 + sm_121 cross-compile toolchain |

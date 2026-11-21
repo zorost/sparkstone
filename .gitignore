@@ -6,3 +6,4 @@
 /link-report-*.txt
 __pycache__/
 *.pyc
+/.venv-tools/

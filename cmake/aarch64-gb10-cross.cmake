@@ -1,6 +1,6 @@
 # Cross-compile Basalt for DGX Spark (GB10: aarch64 host, sm_121 GPU) from an x86-64 Linux machine.
 #
-#   cmake -S engine -B build-gb10 --toolchain cmake/aarch64-gb10-cross.cmake \
+#   cmake -S engine -B build-gb10 --toolchain "$PWD/cmake/aarch64-gb10-cross.cmake" \
 #         -DCUDAToolkit_ROOT=/path/to/cuda-aarch64-root -DCMAKE_CUDA_ARCHITECTURES=121
 #
 # CUDA_AARCH64_ROOT (or CUDAToolkit_ROOT) must hold an x86-64 nvcc (bin/, include/, nvvm/) with AArch64 libraries in

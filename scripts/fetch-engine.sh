@@ -4,8 +4,8 @@
 #   ENGINE_DIR=/path scripts/fetch-engine.sh
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
-# shellcheck disable=SC1091
-source <(grep -E '^(repo|commit)=' "$root/UPSTREAM")
+repo=$(sed -n 's/^repo=//p' "$root/UPSTREAM")
+commit=$(sed -n 's/^commit=//p' "$root/UPSTREAM")
 dir=${ENGINE_DIR:-$root/engine}
 if [ ! -d "$dir/.git" ]; then
   git clone --filter=blob:none "$repo" "$dir"

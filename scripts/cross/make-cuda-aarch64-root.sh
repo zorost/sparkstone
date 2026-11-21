@@ -2,7 +2,7 @@
 # Assemble a CUDA 13.0 root for cross-compiling Basalt to aarch64 + sm_121 on an x86-64 Linux machine, from PyPI
 # wheels only (no NVIDIA apt repository needed): x86-64 nvcc/ptxas/headers and AArch64 libcudart/libcublas.
 #   scripts/cross/make-cuda-aarch64-root.sh [DEST]     (default: ~/.cuda-aarch64)
-# Then: cmake -S engine -B build-gb10 --toolchain cmake/aarch64-gb10-cross.cmake -DCUDAToolkit_ROOT=DEST/root \
+# Then: cmake -S engine -B build-gb10 --toolchain "$PWD/cmake/aarch64-gb10-cross.cmake" -DCUDAToolkit_ROOT=DEST/root \
 #             -DCMAKE_CUDA_ARCHITECTURES=121 -DBASALT_MODELS=inkling2
 # Needs: python3 -m venv, pip, and g++-13-aarch64-linux-gnu (apt).
 set -euo pipefail
